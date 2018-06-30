@@ -1,6 +1,17 @@
-var userRepository = require('../repositories/userRepository').userRepository
-var roleRepository = require('../repositories/roleRepository').roleRepository
-var bcrypt = require('bcrypt')
+var userRepository = require('../repositories/userRepository').userRepository;
+var roleRepository = require('../repositories/roleRepository').roleRepository;
+var bcrypt = require('bcrypt');
+var jwt = require('jsonwebtoken');
+var ejwt = require('express-jwt');
+var _ = require('lodash');
+
+var jwtCheck = ejwt({
+  secret: 'secret'
+});
+
+function createToken(user) {
+  return jwt.sign(_.omit(user, 'password'), 'secret', { expiresIn: 60*60*5 });
+}
 
 var insert = function(req, callback) {
   let username = req.body.username;
@@ -125,10 +136,33 @@ var remove = function(req, callback) {
   })
 }
 
+var login = function(req, callback) {
+  let username = req.body.username;
+  let password = req.body.password;
+
+  userRepository.findOneByUsername(username, (err, user) => {
+    if(err)
+      callback(err, null);
+    else if(!user)
+      callback(`User: ${username} does not exist.`, null);
+    else {
+      bcrypt.compare(user[0].passwordHash, password, (err, result) => {
+        if(err)
+          callback(err, null);
+        else if(result)
+          callback('User is unauthorized.', null);
+        else
+          callback(null, createToken(user));
+      })
+    }
+  })
+}
+
 exports.userService = {
   insert,
   update,
   findOneById,
   findOneByUsername,
-  remove
+  remove,
+  login
 }
